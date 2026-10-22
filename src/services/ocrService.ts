@@ -9,7 +9,7 @@ async function getWorker(onProgress?: (progress: number, status: string) => void
       const worker = await createWorker('eng', 1, {
         logger: (m) => {
           if (m.status === 'recognizing text' && typeof m.progress === 'number') {
-            onProgress?.(Math.round(m.progress * 100), 'Recognizing text & numbers...');
+            onProgress?.(Math.round(m.progress * 100), 'Recognizing characters...');
           } else if (m.status) {
             onProgress?.(30, m.status.replace(/_/g, ' '));
           }
@@ -21,20 +21,38 @@ async function getWorker(onProgress?: (progress: number, status: string) => void
   return workerPromise;
 }
 
+export interface OcrOptions {
+  whitelist?: string;
+}
+
 export interface OcrResult {
   text: string;
   confidence: number;
   words: OcrWord[];
 }
 
+export const LETTERS_WHITELIST = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
 export async function performOcr(
   imageSource: string | HTMLCanvasElement,
+  options?: OcrOptions,
   onProgress?: (progress: number, status: string) => void
 ): Promise<OcrResult> {
-  onProgress?.(15, 'Initializing Tesseract OCR engine...');
+  onProgress?.(15, 'Loading Tesseract engine...');
   const worker = await getWorker(onProgress);
 
-  onProgress?.(45, 'Scanning visual characters & bounding lines...');
+  // Set whitelist parameter if provided
+  if (options?.whitelist) {
+    await worker.setParameters({
+      tessedit_char_whitelist: options.whitelist,
+    });
+  } else {
+    await worker.setParameters({
+      tessedit_char_whitelist: '',
+    });
+  }
+
+  onProgress?.(45, 'Scanning letter glyphs...');
   const res = await worker.recognize(imageSource);
 
   const cleanText = res.data.text ? res.data.text.trim() : '';
@@ -46,7 +64,8 @@ export async function performOcr(
     bbox: w.bbox,
   }));
 
-  onProgress?.(100, 'OCR scan complete.');
+  onProgress?.(100, 'Recognition complete.');
+
   return {
     text: cleanText,
     confidence: avgConfidence,

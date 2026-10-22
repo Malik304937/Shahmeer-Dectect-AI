@@ -66,13 +66,13 @@ export const DetectionHistory: React.FC<DetectionHistoryProps> = ({
                 </div>
 
                 <div className="flex sm:flex-col items-baseline sm:items-center gap-1.5 sm:gap-0 sm:w-full min-w-0">
-                  {item.isTextOCR ? (
-                    <span className="font-mono text-xs font-bold text-cyan-300 truncate max-w-[120px] sm:max-w-full">
-                      {item.text?.slice(0, 10) || 'Text'}
+                  {item.category === 'letters' || item.isTextOCR ? (
+                    <span className="font-mono text-sm sm:text-base font-bold text-cyan-300 truncate max-w-[120px] sm:max-w-full">
+                      {item.text?.slice(0, 8) || 'Text'}
                     </span>
                   ) : (
                     <span className="font-mono text-xl sm:text-2xl font-black text-white">
-                      {item.digit}
+                      {item.numberString || item.digit}
                     </span>
                   )}
                   <span className="text-[10px] font-mono text-emerald-400 tabular-nums">

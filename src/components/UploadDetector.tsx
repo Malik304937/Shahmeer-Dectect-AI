@@ -1,22 +1,23 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileImage, Wand2, Type, Hash, Sparkles, X, RefreshCw } from 'lucide-react';
-import { performOcr } from '../services/ocrService.ts';
-import { OcrWord } from '../types.ts';
+import { Upload, Wand2, X, RefreshCw } from 'lucide-react';
+import { performOcr, LETTERS_WHITELIST } from '../services/ocrService.ts';
+import { OcrWord, DetectionCategory } from '../types.ts';
 
 interface UploadDetectorProps {
-  onDetectDigit: (canvas: HTMLCanvasElement) => void;
+  onDetectNumber: (canvas: HTMLCanvasElement) => void;
   onDetectOcr: (result: { text: string; confidence: number; words: OcrWord[]; thumbnailUrl: string }) => void;
   isProcessing: boolean;
+  targetType: DetectionCategory;
 }
 
 export const UploadDetector: React.FC<UploadDetectorProps> = ({
-  onDetectDigit,
+  onDetectNumber,
   onDetectOcr,
   isProcessing,
+  targetType,
 }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string>('');
-  const [detectionMode, setDetectionMode] = useState<'ocr' | 'digit'>('ocr');
   const [ocrProgress, setOcrProgress] = useState<{ percent: number; message: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -52,49 +53,38 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
   };
 
   // Helper to load sample synthetic image
-  const loadSampleImage = (type: 'digit7' | 'invoice' | 'digits') => {
+  const loadSampleImage = (type: '7' | '42' | '305' | 'A' | 'B' | 'ABC') => {
     const canvas = document.createElement('canvas');
-    canvas.width = 400;
-    canvas.height = 300;
+    canvas.width = 560;
+    canvas.height = 240;
     const ctx = canvas.getContext('2d')!;
 
-    if (type === 'digit7') {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, 400, 300);
-      ctx.fillStyle = '#111827';
-      ctx.font = 'bold 180px "Plus Jakarta Sans", sans-serif';
+    // Black background, white stroke
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(0, 0, 560, 240);
+    ctx.fillStyle = '#ffffff';
+
+    if (type.length === 1) {
+      ctx.font = 'bold 150px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('7', 200, 160);
-      setImageName('handwritten-sample-7.png');
-      setDetectionMode('digit');
-    } else if (type === 'invoice') {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, 400, 300);
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 24px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText('INVOICE #94821', 40, 60);
-      ctx.font = '16px monospace';
-      ctx.fillStyle = '#334155';
-      ctx.fillText('Customer ID: SH-7702', 40, 100);
-      ctx.fillText('Total Items: 14 Units', 40, 135);
-      ctx.fillText('Batch Code: 8904-ALPHA', 40, 170);
-      ctx.font = 'bold 28px monospace';
-      ctx.fillStyle = '#0284c7';
-      ctx.fillText('AMOUNT: $4,850.00', 40, 230);
-      setImageName('printed-receipt-sample.png');
-      setDetectionMode('ocr');
-    } else {
-      ctx.fillStyle = '#090d16';
-      ctx.fillRect(0, 0, 400, 300);
-      ctx.fillStyle = '#f8fafc';
-      ctx.font = 'bold 72px "JetBrains Mono", monospace';
+      ctx.fillText(type, 280, 125);
+    } else if (type.length === 2) {
+      ctx.font = 'bold 130px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('384 920 157', 200, 160);
-      setImageName('printed-numbers-sample.png');
-      setDetectionMode('ocr');
+      ctx.textBaseline = 'middle';
+      ctx.fillText(type[0], 190, 125);
+      ctx.fillText(type[1], 370, 125);
+    } else {
+      ctx.font = 'bold 110px "Plus Jakarta Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(type[0], 130, 125);
+      ctx.fillText(type[1], 280, 125);
+      ctx.fillText(type[2], 430, 125);
     }
 
+    setImageName(`sample-${type.toLowerCase()}.png`);
     setSelectedImage(canvas.toDataURL('image/png'));
   };
 
@@ -110,15 +100,25 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0);
 
-      if (detectionMode === 'digit') {
-        onDetectDigit(canvas);
+      if (targetType === 'numbers') {
+        onDetectNumber(canvas);
       } else {
         try {
-          setOcrProgress({ percent: 10, message: 'Starting Tesseract OCR...' });
-          const ocrRes = await performOcr(canvas, (pct, msg) => {
-            setOcrProgress({ percent: pct, message: msg });
-          });
+          setOcrProgress({ percent: 10, message: 'Starting letter OCR scan...' });
+          const ocrRes = await performOcr(
+            canvas,
+            { whitelist: LETTERS_WHITELIST },
+            (pct, msg) => {
+              setOcrProgress({ percent: pct, message: msg });
+            }
+          );
           setOcrProgress(null);
+
+          if (!ocrRes.text || ocrRes.text.trim() === '') {
+            alert('I could not see anything, please try again');
+            return;
+          }
+
           onDetectOcr({
             text: ocrRes.text,
             confidence: ocrRes.confidence,
@@ -127,7 +127,7 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
           });
         } catch (err: any) {
           setOcrProgress(null);
-          alert('OCR detection error: ' + (err.message || 'Failed to parse text'));
+          alert('I could not see anything, please try again');
         }
       }
     };
@@ -135,38 +135,7 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center w-full max-w-md mx-auto">
-      {/* Mode toggle between Tesseract OCR & CNN Digit */}
-      <div className="mb-3 flex w-full items-center justify-between text-xs text-slate-400">
-        <span className="text-[11px] font-medium text-slate-400">Recognition Engine:</span>
-        <div className="flex items-center gap-1 rounded-lg bg-slate-900/90 p-1 border border-slate-800">
-          <button
-            type="button"
-            onClick={() => setDetectionMode('ocr')}
-            className={`flex items-center gap-1 rounded px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
-              detectionMode === 'ocr'
-                ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Type className="h-3 w-3" />
-            <span>Printed Text (OCR)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setDetectionMode('digit')}
-            className={`flex items-center gap-1 rounded px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
-              detectionMode === 'digit'
-                ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Hash className="h-3 w-3" />
-            <span>Single Digit (CNN)</span>
-          </button>
-        </div>
-      </div>
-
+    <div className="flex flex-col items-center w-full max-w-[560px] mx-auto">
       {/* Upload Box / Dropzone */}
       {!selectedImage ? (
         <div
@@ -174,7 +143,7 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
           onDragLeave={onDragLeave}
           onDrop={onDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`flex aspect-square w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition-all cursor-pointer ${
+          className={`flex w-full h-[200px] sm:h-[240px] flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition-all cursor-pointer ${
             isDragging
               ? 'border-cyan-400 bg-cyan-950/20 scale-[1.01]'
               : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-900/40'
@@ -192,22 +161,24 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
             }}
           />
 
-          <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-            <Upload className="h-7 w-7" />
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <Upload className="h-6 w-6" />
           </div>
 
           <h3 className="text-sm font-bold text-white mb-1">Upload or Drag Image</h3>
           <p className="text-xs text-slate-400 max-w-xs mb-3">
-            Upload printed receipts, documents, license plates, or handwritten numbers
+            {targetType === 'numbers'
+              ? 'Upload handwritten or printed numbers (1 to 3 digits like 7, 42, 305)'
+              : 'Upload letters or words (e.g. A, B, ABC)'}
           </p>
 
-          <span className="rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 transition-colors">
+          <span className="rounded-lg bg-cyan-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-cyan-500 transition-colors">
             Browse File
           </span>
         </div>
       ) : (
         /* Image Preview Box */
-        <div className="relative aspect-square w-full overflow-hidden rounded-2xl border-2 border-slate-800 bg-black shadow-2xl flex items-center justify-center">
+        <div className="relative w-full h-[200px] sm:h-[240px] overflow-hidden rounded-2xl border-2 border-slate-800 bg-black shadow-2xl flex items-center justify-center">
           <img
             src={selectedImage}
             alt="Uploaded preview"
@@ -235,29 +206,37 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
       )}
 
       {/* Quick Sample Presets */}
-      <div className="mt-3 flex items-center gap-1.5 text-xs text-slate-400">
-        <span className="text-[11px] text-slate-500">Demo samples:</span>
-        <button
-          type="button"
-          onClick={() => loadSampleImage('invoice')}
-          className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[11px] font-medium text-slate-300 hover:border-slate-700 hover:text-white transition-colors cursor-pointer"
-        >
-          Invoice Text
-        </button>
-        <button
-          type="button"
-          onClick={() => loadSampleImage('digits')}
-          className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[11px] font-medium text-slate-300 hover:border-slate-700 hover:text-white transition-colors cursor-pointer"
-        >
-          Printed Numbers
-        </button>
-        <button
-          type="button"
-          onClick={() => loadSampleImage('digit7')}
-          className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[11px] font-medium text-slate-300 hover:border-slate-700 hover:text-white transition-colors cursor-pointer"
-        >
-          Digit "7"
-        </button>
+      <div className="mt-3 flex flex-wrap items-center justify-between w-full text-xs text-slate-400">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-slate-500">Quick samples:</span>
+          {targetType === 'numbers' ? (
+            <>
+              {(['7', '42', '305'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => loadSampleImage(s)}
+                  className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[11px] font-mono font-medium text-slate-300 hover:border-slate-700 hover:text-white transition-colors cursor-pointer"
+                >
+                  {s}
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              {(['A', 'B', 'ABC'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => loadSampleImage(s)}
+                  className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[11px] font-mono font-medium text-slate-300 hover:border-slate-700 hover:text-white transition-colors cursor-pointer"
+                >
+                  {s}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
       </div>
 
       {/* OCR Progress Indicator if active */}
@@ -280,7 +259,7 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
       )}
 
       {/* Detect Button */}
-      <div className="mt-5 w-full">
+      <div className="mt-4 w-full">
         <button
           type="button"
           onClick={handleRunDetection}
@@ -291,9 +270,9 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
           <span>
             {isProcessing || !!ocrProgress
               ? 'Recognizing with AI...'
-              : detectionMode === 'ocr'
-              ? 'Extract Printed Text (Tesseract OCR)'
-              : 'Detect Digit (CNN Model)'}
+              : targetType === 'numbers'
+              ? 'Segment & Detect Numbers (CNN)'
+              : 'Recognize Letters (Tesseract OCR)'}
           </span>
         </button>
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PenTool, Camera, UploadCloud, Sparkles, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { PenTool, Camera, UploadCloud, Sparkles, AlertCircle, RefreshCw, CheckCircle2, Hash, Type } from 'lucide-react';
 import { Header } from './components/Header.tsx';
 import { DrawCanvas } from './components/DrawCanvas.tsx';
 import { CameraDetector } from './components/CameraDetector.tsx';
@@ -17,8 +17,14 @@ import {
   resetSavedModel,
   getCachedTestAccuracy,
 } from './services/mnistModel.ts';
-import { preprocessDigitCanvas } from './utils/imagePreprocessing.ts';
 import {
+  segmentAndPreprocessDigits,
+  prepareDrawingForLetterOcr,
+} from './utils/imagePreprocessing.ts';
+import { performOcr, LETTERS_WHITELIST } from './services/ocrService.ts';
+import {
+  DetectionCategory,
+  SingleDigitDetection,
   PredictionResult as PredictionResultType,
   TrainingProgress,
   InputMode,
@@ -28,6 +34,7 @@ import {
 const LOCAL_STORAGE_HISTORY_KEY = 'shahmeer_detect_ai_history_v1';
 
 export default function App() {
+  const [detectionCategory, setDetectionCategory] = useState<DetectionCategory>('numbers');
   const [inputMode, setInputMode] = useState<InputMode>('draw');
   const [modelStatus, setModelStatus] = useState<'loading' | 'training' | 'ready' | 'error'>('loading');
   const [isCached, setIsCached] = useState<boolean>(false);
@@ -128,7 +135,7 @@ export default function App() {
     initModel();
   }, [initModel]);
 
-  // Execute CNN detection on canvas (from Draw, Camera, or Upload)
+  // Execute detection on canvas (from Draw, Camera, or Upload)
   const handleDetect = async (
     canvas: HTMLCanvasElement,
     contrastOverride?: boolean | 'auto'
@@ -137,32 +144,87 @@ export default function App() {
     setDetectionError(null);
 
     try {
-      // 1. Preprocessing (Crop, 20x20 scale, 28x28 center of mass, normalize)
-      const preprocessed = preprocessDigitCanvas(canvas, contrastOverride);
+      if (detectionCategory === 'numbers') {
+        // NUMBERS mode (1, 2 or 3 digits, for example 7, 42, 305):
+        // Segment image into separate digits via vertical column ink projection
+        const segmented = segmentAndPreprocessDigits(canvas, contrastOverride);
 
-      // 2. Inference via TensorFlow.js CNN
-      const prediction = await predictDigit(preprocessed.normalizedPixels);
+        if (!segmented.digits || segmented.digits.length === 0) {
+          throw new Error('I could not see anything, please try again');
+        }
 
-      const resultItem: PredictionResultType = {
-        digit: prediction.digit,
-        confidence: prediction.confidence,
-        probabilities: prediction.probabilities,
-        thumbnailUrl: preprocessed.sourceThumbnailUrl,
-        preview28x28Url: preprocessed.preview28x28DataUrl,
-        source: inputMode,
-        timestamp: Date.now(),
-        preprocessingInfo: {
-          wasInverted: preprocessed.wasInverted,
-          boundingBox: preprocessed.boundingBox,
-          centerOfMass: preprocessed.centerOfMass,
-        },
-      };
+        // For each cropped digit, classify with existing TensorFlow.js CNN
+        const detectedDigits: SingleDigitDetection[] = [];
+        for (const seg of segmented.digits) {
+          const pred = await predictDigit(seg.normalizedPixels);
+          detectedDigits.push({
+            digit: pred.digit,
+            confidence: pred.confidence,
+            probabilities: pred.probabilities,
+            preview28x28Url: seg.preview28x28DataUrl,
+            boundingBox: seg.boundingBox,
+          });
+        }
 
-      setCurrentResult(resultItem);
-      updateHistory(resultItem);
+        // Join digits from left to right into full number string (e.g. "305")
+        const numberString = detectedDigits.map((d) => d.digit).join('');
+        const avgConfidence = Math.round(
+          detectedDigits.reduce((acc, d) => acc + d.confidence, 0) / detectedDigits.length
+        );
+
+        const resultItem: PredictionResultType = {
+          category: 'numbers',
+          numberString,
+          digits: detectedDigits,
+          digit: detectedDigits[0].digit,
+          confidence: avgConfidence,
+          probabilities: detectedDigits[0].probabilities,
+          preview28x28Url: detectedDigits[0].preview28x28Url,
+          thumbnailUrl: segmented.sourceThumbnailUrl,
+          source: inputMode,
+          timestamp: Date.now(),
+          preprocessingInfo: {
+            wasInverted: segmented.wasInverted,
+            segmentCount: detectedDigits.length,
+            boundingBox: detectedDigits[0].boundingBox,
+          },
+        };
+
+        setCurrentResult(resultItem);
+        updateHistory(resultItem);
+      } else {
+        // LETTERS mode (A-Z, for example A, B, C or short words like ABC):
+        // For Draw canvas: convert drawing to black ink on white background, make strokes thick, scale up 2x
+        let ocrInputCanvas = canvas;
+        if (inputMode === 'draw') {
+          ocrInputCanvas = prepareDrawingForLetterOcr(canvas);
+        }
+
+        const ocrRes = await performOcr(ocrInputCanvas, {
+          whitelist: LETTERS_WHITELIST,
+        });
+
+        const cleanText = ocrRes.text.trim();
+        if (!cleanText) {
+          throw new Error('I could not see anything, please try again');
+        }
+
+        const resultItem: PredictionResultType = {
+          category: 'letters',
+          text: cleanText,
+          confidence: ocrRes.confidence,
+          ocrWords: ocrRes.words,
+          thumbnailUrl: canvas.toDataURL('image/png'),
+          source: inputMode,
+          timestamp: Date.now(),
+        };
+
+        setCurrentResult(resultItem);
+        updateHistory(resultItem);
+      }
     } catch (err: any) {
       console.warn('Detection failed:', err);
-      setDetectionError(err.message || 'Detection failed. Please try again.');
+      setDetectionError('I could not see anything, please try again');
     } finally {
       setIsProcessing(false);
     }
@@ -175,7 +237,13 @@ export default function App() {
     words: OcrWord[];
     thumbnailUrl: string;
   }) => {
+    if (!ocrData.text || !ocrData.text.trim()) {
+      setDetectionError('I could not see anything, please try again');
+      return;
+    }
+
     const resultItem: PredictionResultType = {
+      category: 'letters',
       isTextOCR: true,
       text: ocrData.text,
       confidence: ocrData.confidence,
@@ -266,6 +334,47 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left Column: Interactive Input Card (Draw, Camera, or Upload) */}
           <div className="lg:col-span-6 flex flex-col rounded-2xl border border-slate-800 bg-slate-900/40 p-5 sm:p-6 backdrop-blur-sm">
+            {/* Mode Switch: Numbers vs Letters (Requirement 1) */}
+            <div className="mb-4 flex flex-col items-center">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                Recognition Mode
+              </span>
+              <div className="inline-flex items-center rounded-2xl bg-slate-950/90 p-1.5 border border-slate-800 shadow-inner">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetectionCategory('numbers');
+                    setDetectionError(null);
+                  }}
+                  className={`flex items-center gap-2 rounded-xl px-5 py-2 text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                    detectionCategory === 'numbers'
+                      ? 'bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-md shadow-cyan-500/25'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Hash className="h-4 w-4" />
+                  <span>Numbers</span>
+                  <span className="text-[10px] opacity-75 font-mono ml-0.5">(1–3 digits)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetectionCategory('letters');
+                    setDetectionError(null);
+                  }}
+                  className={`flex items-center gap-2 rounded-xl px-5 py-2 text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                    detectionCategory === 'letters'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-purple-500/25'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Type className="h-4 w-4" />
+                  <span>Letters</span>
+                  <span className="text-[10px] opacity-75 font-mono ml-0.5">(A–Z, words)</span>
+                </button>
+              </div>
+            </div>
+
             {/* Tab Selector (Draw, Camera, Upload) */}
             <div className="mb-5 flex items-center justify-center">
               <div className="flex items-center gap-1 rounded-xl bg-slate-950/90 p-1 border border-slate-800">
@@ -322,18 +431,24 @@ export default function App() {
             {/* Input Viewport (Draw Canvas, Camera, or Upload) */}
             <div className="w-full flex justify-center">
               {inputMode === 'draw' ? (
-                <DrawCanvas onDetect={handleDetect} isProcessing={isProcessing} />
+                <DrawCanvas
+                  onDetect={handleDetect}
+                  isProcessing={isProcessing}
+                  targetType={detectionCategory}
+                />
               ) : inputMode === 'camera' ? (
                 <CameraDetector
                   onDetect={handleDetect}
                   isProcessing={isProcessing}
                   onSwitchToDraw={() => setInputMode('draw')}
+                  targetType={detectionCategory}
                 />
               ) : (
                 <UploadDetector
-                  onDetectDigit={handleDetect}
+                  onDetectNumber={(canvas) => handleDetect(canvas)}
                   onDetectOcr={handleDetectOcr}
                   isProcessing={isProcessing}
+                  targetType={detectionCategory}
                 />
               )}
             </div>

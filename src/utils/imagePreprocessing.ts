@@ -1,12 +1,24 @@
 /**
- * Image preprocessing pipeline replicating standard MNIST formatting:
- * 1. Automatic dark-on-light vs light-on-dark contrast detection & inversion.
- * 2. Background noise suppression.
- * 3. Bounding-box detection around the digit stroke.
- * 4. Aspect-ratio preserving scaling into a 20x20 box.
- * 5. Centering into a 28x28 canvas using center-of-mass alignment.
- * 6. Pixel normalization to [0.0, 1.0].
+ * Image preprocessing and segmentation pipeline:
+ * 1. Multi-digit segmentation (1, 2, or 3 digits like 7, 42, 305) via vertical column ink projection.
+ * 2. Automatic dark-on-light vs light-on-dark contrast detection & inversion.
+ * 3. Aspect-ratio preserving scaling into 20x20 box.
+ * 4. Centering into 28x28 grid with center-of-mass alignment (MNIST standard).
+ * 5. Stroke thickening and 2x scaling for Letters mode (Tesseract OCR).
  */
+
+export interface SinglePreprocessedDigit {
+  normalizedPixels: Float32Array; // 784 floats
+  preview28x28DataUrl: string;
+  boundingBox: { x: number; y: number; width: number; height: number };
+  centerOfMass: { x: number; y: number };
+}
+
+export interface MultiDigitPreprocessingResult {
+  digits: SinglePreprocessedDigit[];
+  sourceThumbnailUrl: string;
+  wasInverted: boolean;
+}
 
 export interface PreprocessingResult {
   normalizedPixels: Float32Array; // 784 floats
@@ -17,10 +29,13 @@ export interface PreprocessingResult {
   centerOfMass: { x: number; y: number };
 }
 
-export function preprocessDigitCanvas(
+/**
+ * Preprocesses a canvas into an inverted, noise-cleaned grayscale float buffer.
+ */
+function extractGrayscaleIntensity(
   sourceCanvas: HTMLCanvasElement,
   forcedInversion?: boolean | 'auto'
-): PreprocessingResult {
+): { grayscale: Float32Array; width: number; height: number; shouldInvert: boolean } {
   const width = sourceCanvas.width;
   const height = sourceCanvas.height;
 
@@ -33,7 +48,7 @@ export function preprocessDigitCanvas(
   const data = imageData.data;
 
   // 1. Analyze border luminance to determine polarity
-  const borderMarginX = Math.max(2, Math.floor(width * 0.08));
+  const borderMarginX = Math.max(2, Math.floor(width * 0.06));
   const borderMarginY = Math.max(2, Math.floor(height * 0.08));
   let borderLumaSum = 0;
   let borderLumaCount = 0;
@@ -56,7 +71,6 @@ export function preprocessDigitCanvas(
   }
 
   const avgBorderLuma = borderLumaCount > 0 ? borderLumaSum / borderLumaCount : 0;
-  // If border luminance is high (> 125), digit is dark ink on light background
   const shouldInvert =
     forcedInversion === true
       ? true
@@ -64,19 +78,18 @@ export function preprocessDigitCanvas(
       ? false
       : avgBorderLuma > 125;
 
-  // 2. Build single-channel intensity map (where stroke > 0, background = 0)
+  // 2. Build single-channel intensity map (stroke > 0, background = 0)
   const grayscale = new Float32Array(width * height);
   let maxIntensity = 0;
 
   for (let i = 0; i < width * height; i++) {
     const idx = i * 4;
-    // Standard RGB to Luminance
     const luma = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
 
     let strokeVal = shouldInvert ? avgBorderLuma - luma : luma - avgBorderLuma;
     if (strokeVal < 0) strokeVal = 0;
 
-    // Remove background low-intensity noise
+    // Suppress low-intensity paper or sensor noise
     if (strokeVal < 25) {
       strokeVal = 0;
     }
@@ -87,7 +100,7 @@ export function preprocessDigitCanvas(
     }
   }
 
-  // Contrast boost if stroke is visible
+  // Contrast stretch
   if (maxIntensity > 30) {
     const scale = 255.0 / maxIntensity;
     for (let i = 0; i < width * height; i++) {
@@ -95,41 +108,37 @@ export function preprocessDigitCanvas(
     }
   }
 
-  // 3. Find Bounding Box of the digit
-  let minX = width;
-  let maxX = -1;
-  let minY = height;
-  let maxY = -1;
-  let nonZeroCount = 0;
+  return { grayscale, width, height, shouldInvert };
+}
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const val = grayscale[y * width + x];
-      if (val > 35) {
-        nonZeroCount++;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-    }
-  }
-
-  if (nonZeroCount < 15 || maxX < minX || maxY < minY) {
-    throw new Error('No digit detected! Please draw or place a clear digit inside the guide area.');
-  }
-
-  // Add small padding to bounding box if possible
+/**
+ * Formats a bounded crop into a 28x28 normalized MNIST-compatible tensor.
+ */
+function formatCropToMnist28x28(
+  grayscale: Float32Array,
+  srcWidth: number,
+  srcHeight: number,
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number
+): {
+  normalizedPixels: Float32Array;
+  preview28x28DataUrl: string;
+  boundingBox: { x: number; y: number; width: number; height: number };
+  centerOfMass: { x: number; y: number };
+} {
+  // Add small padding to bounding box
   const pad = 2;
-  minX = Math.max(0, minX - pad);
-  minY = Math.max(0, minY - pad);
-  maxX = Math.min(width - 1, maxX + pad);
-  maxY = Math.min(height - 1, maxY + pad);
+  const cMinX = Math.max(0, minX - pad);
+  const cMinY = Math.max(0, minY - pad);
+  const cMaxX = Math.min(srcWidth - 1, maxX + pad);
+  const cMaxY = Math.min(srcHeight - 1, maxY + pad);
 
-  const bbWidth = maxX - minX + 1;
-  const bbHeight = maxY - minY + 1;
+  const bbWidth = cMaxX - cMinX + 1;
+  const bbHeight = cMaxY - cMinY + 1;
 
-  // 4. Create an intermediate canvas for the cropped bounding box
+  // 1. Intermediate canvas for cropped bounding box
   const cropCanvas = document.createElement('canvas');
   cropCanvas.width = bbWidth;
   cropCanvas.height = bbHeight;
@@ -138,7 +147,7 @@ export function preprocessDigitCanvas(
 
   for (let cy = 0; cy < bbHeight; cy++) {
     for (let cx = 0; cx < bbWidth; cx++) {
-      const srcIdx = (minY + cy) * width + (minX + cx);
+      const srcIdx = (cMinY + cy) * srcWidth + (cMinX + cx);
       const dstIdx = (cy * bbWidth + cx) * 4;
       const val = grayscale[srcIdx];
       cropImgData.data[dstIdx] = val;
@@ -149,7 +158,7 @@ export function preprocessDigitCanvas(
   }
   cropCtx.putImageData(cropImgData, 0, 0);
 
-  // 5. Scale the bounding box to fit inside 20x20 (preserving aspect ratio)
+  // 2. Scale bounding box to fit inside 20x20 preserving aspect ratio
   const maxDim = Math.max(bbWidth, bbHeight);
   const scale = 20.0 / maxDim;
   const scaledW = Math.max(1, Math.round(bbWidth * scale));
@@ -163,7 +172,7 @@ export function preprocessDigitCanvas(
   scaledCtx.imageSmoothingQuality = 'high';
   scaledCtx.drawImage(cropCanvas, 0, 0, bbWidth, bbHeight, 0, 0, scaledW, scaledH);
 
-  // 6. Center into 28x28 grid
+  // 3. Center into 28x28 grid
   const initialCanvas = document.createElement('canvas');
   initialCanvas.width = 28;
   initialCanvas.height = 28;
@@ -177,7 +186,7 @@ export function preprocessDigitCanvas(
 
   const initData = initCtx.getImageData(0, 0, 28, 28).data;
 
-  // 7. Center of Mass alignment (MNIST standard)
+  // 4. Center of Mass alignment (MNIST standard)
   let totalMass = 0;
   let sumX = 0;
   let sumY = 0;
@@ -185,7 +194,7 @@ export function preprocessDigitCanvas(
   for (let y = 0; y < 28; y++) {
     for (let x = 0; x < 28; x++) {
       const idx = (y * 28 + x) * 4;
-      const mass = initData[idx]; // red channel = intensity
+      const mass = initData[idx];
       totalMass += mass;
       sumX += x * mass;
       sumY += y * mass;
@@ -203,16 +212,14 @@ export function preprocessDigitCanvas(
     finalComX = comX;
     finalComY = comY;
 
-    // Optimal center in 28x28 is (13.5, 13.5)
     shiftX = Math.round(13.5 - comX);
     shiftY = Math.round(13.5 - comY);
 
-    // Limit shift to avoid pushing stroke edges outside 28x28 boundary
     shiftX = Math.max(-3, Math.min(3, shiftX));
     shiftY = Math.max(-3, Math.min(3, shiftY));
   }
 
-  // Draw final shifted 28x28 canvas
+  // Final shifted 28x28 canvas
   const finalCanvas = document.createElement('canvas');
   finalCanvas.width = 28;
   finalCanvas.height = 28;
@@ -224,25 +231,215 @@ export function preprocessDigitCanvas(
   const finalImageData = finalCtx.getImageData(0, 0, 28, 28);
   const finalData = finalImageData.data;
 
-  // 8. Convert to Float32Array normalized [0, 1]
+  // Normalize to [0, 1]
   const normalizedPixels = new Float32Array(784);
   for (let i = 0; i < 784; i++) {
     normalizedPixels[i] = finalData[i * 4] / 255.0;
   }
 
-  // Capture preview representations
-  const preview28x28DataUrl = finalCanvas.toDataURL('image/png');
-  const sourceThumbnailUrl = sourceCanvas.toDataURL('image/png');
-
   return {
     normalizedPixels,
-    preview28x28DataUrl,
-    sourceThumbnailUrl,
-    wasInverted: shouldInvert,
-    boundingBox: { x: minX, y: minY, width: bbWidth, height: bbHeight },
+    preview28x28DataUrl: finalCanvas.toDataURL('image/png'),
+    boundingBox: { x: cMinX, y: cMinY, width: bbWidth, height: bbHeight },
     centerOfMass: {
       x: Number((finalComX + shiftX).toFixed(1)),
       y: Number((finalComY + shiftY).toFixed(1)),
     },
   };
+}
+
+/**
+ * Segment image into 1, 2, or 3 separate digits (e.g. 7, 42, 305)
+ * using vertical column ink projection and clear gap splitting.
+ */
+export function segmentAndPreprocessDigits(
+  sourceCanvas: HTMLCanvasElement,
+  forcedInversion?: boolean | 'auto'
+): MultiDigitPreprocessingResult {
+  const { grayscale, width, height, shouldInvert } = extractGrayscaleIntensity(
+    sourceCanvas,
+    forcedInversion
+  );
+
+  // 1. Calculate ink count per column
+  const colInkCounts = new Int32Array(width);
+  for (let x = 0; x < width; x++) {
+    let count = 0;
+    for (let y = 0; y < height; y++) {
+      if (grayscale[y * width + x] > 35) {
+        count++;
+      }
+    }
+    colInkCounts[x] = count;
+  }
+
+  // 2. Identify segments separated by vertical gaps
+  interface ColumnSpan {
+    startX: number;
+    endX: number;
+  }
+
+  const minGap = 4; // minimum empty columns that define a gap
+  const rawSegments: ColumnSpan[] = [];
+  let inSegment = false;
+  let segStart = 0;
+  let gapCount = 0;
+
+  for (let x = 0; x < width; x++) {
+    const hasInk = colInkCounts[x] > 2;
+
+    if (!inSegment) {
+      if (hasInk) {
+        inSegment = true;
+        segStart = x;
+        gapCount = 0;
+      }
+    } else {
+      if (!hasInk) {
+        gapCount++;
+        if (gapCount >= minGap) {
+          const segEnd = x - gapCount;
+          rawSegments.push({ startX: segStart, endX: segEnd });
+          inSegment = false;
+        }
+      } else {
+        gapCount = 0;
+      }
+    }
+  }
+
+  if (inSegment) {
+    rawSegments.push({ startX: segStart, endX: width - 1 - gapCount });
+  }
+
+  // 3. For each segment, find exact bounding box & filter noise
+  interface ValidDigitSpan {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+    inkPixels: number;
+  }
+
+  const validSpans: ValidDigitSpan[] = [];
+
+  for (const span of rawSegments) {
+    let sMinX = span.endX;
+    let sMaxX = span.startX;
+    let sMinY = height;
+    let sMaxY = 0;
+    let inkPixels = 0;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = span.startX; x <= span.endX; x++) {
+        if (grayscale[y * width + x] > 35) {
+          inkPixels++;
+          if (x < sMinX) sMinX = x;
+          if (x > sMaxX) sMaxX = x;
+          if (y < sMinY) sMinY = y;
+          if (y > sMaxY) sMaxY = y;
+        }
+      }
+    }
+
+    // Require sufficient pixels and non-empty bounds
+    if (inkPixels >= 18 && sMaxX >= sMinX && sMaxY >= sMinY) {
+      validSpans.push({
+        minX: sMinX,
+        maxX: sMaxX,
+        minY: sMinY,
+        maxY: sMaxY,
+        inkPixels,
+      });
+    }
+  }
+
+  // Friendly message if nothing detected
+  if (validSpans.length === 0) {
+    throw new Error('I could not see anything, please try again');
+  }
+
+  // Sort from left to right
+  validSpans.sort((a, b) => a.minX - b.minX);
+
+  // Accept a maximum of 3 digits
+  const cappedSpans = validSpans.slice(0, 3);
+
+  // 4. Preprocess each segmented digit
+  const processedDigits: SinglePreprocessedDigit[] = cappedSpans.map((span) => {
+    return formatCropToMnist28x28(
+      grayscale,
+      width,
+      height,
+      span.minX,
+      span.maxX,
+      span.minY,
+      span.maxY
+    );
+  });
+
+  return {
+    digits: processedDigits,
+    sourceThumbnailUrl: sourceCanvas.toDataURL('image/png'),
+    wasInverted: shouldInvert,
+  };
+}
+
+/**
+ * Single digit preprocessing (for fallback or single digit tasks).
+ */
+export function preprocessDigitCanvas(
+  sourceCanvas: HTMLCanvasElement,
+  forcedInversion?: boolean | 'auto'
+): PreprocessingResult {
+  const multi = segmentAndPreprocessDigits(sourceCanvas, forcedInversion);
+  const first = multi.digits[0];
+  return {
+    normalizedPixels: first.normalizedPixels,
+    preview28x28DataUrl: first.preview28x28DataUrl,
+    sourceThumbnailUrl: multi.sourceThumbnailUrl,
+    wasInverted: multi.wasInverted,
+    boundingBox: first.boundingBox,
+    centerOfMass: first.centerOfMass,
+  };
+}
+
+/**
+ * Prepares the draw canvas for Letters mode:
+ * Converts white strokes on black canvas to thick black ink on a pure white background,
+ * and scales it up 2x before sending to Tesseract.js.
+ */
+export function prepareDrawingForLetterOcr(sourceCanvas: HTMLCanvasElement): HTMLCanvasElement {
+  const width = sourceCanvas.width;
+  const height = sourceCanvas.height;
+  const srcCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+  if (!srcCtx) return sourceCanvas;
+
+  const srcData = srcCtx.getImageData(0, 0, width, height).data;
+
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = width * 2;
+  outCanvas.height = height * 2;
+  const outCtx = outCanvas.getContext('2d')!;
+
+  // 1. Pure white background
+  outCtx.fillStyle = '#ffffff';
+  outCtx.fillRect(0, 0, outCanvas.width, outCanvas.height);
+
+  // 2. Thick black ink
+  outCtx.fillStyle = '#000000';
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const luma = 0.299 * srcData[idx] + 0.587 * srcData[idx + 1] + 0.114 * srcData[idx + 2];
+      if (luma > 35) {
+        // Draw 2x scaled dot with radius 4 for thick strokes
+        outCtx.beginPath();
+        outCtx.arc(x * 2, y * 2, 4.5, 0, Math.PI * 2);
+        outCtx.fill();
+      }
+    }
+  }
+
+  return outCanvas;
 }

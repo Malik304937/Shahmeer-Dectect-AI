@@ -1,24 +1,41 @@
+export type DetectionCategory = 'numbers' | 'letters';
+
 export interface OcrWord {
   text: string;
   confidence: number;
   bbox?: { x0: number; y0: number; x1: number; y1: number };
 }
 
+export interface SingleDigitDetection {
+  digit: number;
+  confidence: number;
+  probabilities: number[];
+  preview28x28Url: string;
+  boundingBox: { x: number; y: number; width: number; height: number };
+}
+
 export interface PredictionResult {
+  category: DetectionCategory; // 'numbers' | 'letters'
+  // For numbers mode (1, 2, or 3 digits like 7, 42, 305):
+  numberString?: string;
+  digits?: SingleDigitDetection[];
   digit?: number;
+  probabilities?: number[];
+  preview28x28Url?: string;
+  // For letters mode (A-Z / words like ABC):
   text?: string;
   isTextOCR?: boolean;
   ocrWords?: OcrWord[];
+  // Common:
   confidence: number; // 0 - 100
-  probabilities?: number[]; // 10 values, 0 - 100
   thumbnailUrl: string;
-  preview28x28Url?: string;
   source: 'draw' | 'camera' | 'upload';
   timestamp: number;
   preprocessingInfo?: {
     wasInverted: boolean;
-    boundingBox: { x: number; y: number; width: number; height: number };
-    centerOfMass: { x: number; y: number };
+    segmentCount?: number;
+    boundingBox?: { x: number; y: number; width: number; height: number };
+    centerOfMass?: { x: number; y: number };
   };
 }
 

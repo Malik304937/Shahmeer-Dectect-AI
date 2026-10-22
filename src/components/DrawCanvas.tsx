@@ -1,22 +1,26 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Eraser, Wand2, RotateCcw, Sparkles } from 'lucide-react';
+import { Eraser, Wand2, RotateCcw, Sparkles, Lightbulb } from 'lucide-react';
+import { DetectionCategory } from '../types.ts';
 
 interface DrawCanvasProps {
   onDetect: (canvas: HTMLCanvasElement) => void;
   isProcessing: boolean;
+  targetType: DetectionCategory;
 }
 
-export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }) => {
+export const DrawCanvas: React.FC<DrawCanvasProps> = ({
+  onDetect,
+  isProcessing,
+  targetType,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [strokeWidth, setStrokeWidth] = useState<number>(24);
+  const [strokeWidth, setStrokeWidth] = useState<number>(20);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [showGuide, setShowGuide] = useState(true);
 
   // History stack for Undo
   const strokeHistoryRef = useRef<ImageData[]>([]);
-
-  // Smooth drawing points
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
   const initCanvas = useCallback(() => {
@@ -33,7 +37,7 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }
 
   useEffect(() => {
     initCanvas();
-  }, [initCanvas]);
+  }, [initCanvas, targetType]);
 
   const saveState = () => {
     const canvas = canvasRef.current;
@@ -94,7 +98,6 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }
     ctx.lineJoin = 'round';
     ctx.lineWidth = strokeWidth;
 
-    // Draw single dot on tap
     ctx.beginPath();
     ctx.arc(coords.x, coords.y, strokeWidth / 2, 0, Math.PI * 2);
     ctx.fill();
@@ -117,7 +120,6 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }
       ctx.lineJoin = 'round';
       ctx.lineWidth = strokeWidth;
 
-      // Draw quadratic curve between midpoint for smoothness
       ctx.beginPath();
       ctx.moveTo(lastCoords.x, lastCoords.y);
       const midX = (lastCoords.x + currentCoords.x) / 2;
@@ -136,7 +138,8 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }
     lastPointRef.current = null;
   };
 
-  const drawPresetDigit = (digitChar: string) => {
+  // Quick preset template drawer
+  const drawPresetText = (text: string) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -147,10 +150,28 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 200px "Plus Jakarta Sans", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(digitChar, canvas.width / 2, canvas.height / 2 + 10);
+
+    if (text.length === 1) {
+      ctx.font = 'bold 150px "Plus Jakarta Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 10);
+    } else if (text.length === 2) {
+      // 2 digits with clear gap
+      ctx.font = 'bold 130px "Plus Jakarta Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text[0], canvas.width * 0.35, canvas.height / 2 + 10);
+      ctx.fillText(text[1], canvas.width * 0.65, canvas.height / 2 + 10);
+    } else {
+      // 3 digits (e.g. 305 or ABC) with clear gaps
+      ctx.font = 'bold 110px "Plus Jakarta Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text[0], canvas.width * 0.22, canvas.height / 2 + 10);
+      ctx.fillText(text[1], canvas.width * 0.50, canvas.height / 2 + 10);
+      ctx.fillText(text[2], canvas.width * 0.78, canvas.height / 2 + 10);
+    }
 
     setHasDrawn(true);
   };
@@ -161,24 +182,24 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center w-full">
       {/* Top canvas controls bar */}
-      <div className="mb-3 flex w-full max-w-[340px] items-center justify-between text-xs text-slate-400">
+      <div className="mb-3 flex w-full max-w-[560px] items-center justify-between text-xs text-slate-400">
         <div className="flex items-center gap-1.5">
           <span className="text-[11px] font-medium text-slate-400">Stroke:</span>
           <div className="flex items-center gap-1 rounded-lg bg-slate-900/90 p-1 border border-slate-800">
-            {[18, 24, 32].map((size) => (
+            {[16, 22, 28].map((size) => (
               <button
                 key={size}
                 type="button"
                 onClick={() => setStrokeWidth(size)}
-                className={`rounded px-2 py-0.5 text-[11px] font-semibold transition-colors cursor-pointer ${
+                className={`rounded px-2.5 py-0.5 text-[11px] font-semibold transition-colors cursor-pointer ${
                   strokeWidth === size
-                    ? 'bg-indigo-600 text-white'
+                    ? 'bg-cyan-600 text-white'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                {size === 18 ? 'Fine' : size === 24 ? 'Medium' : 'Thick'}
+                {size === 16 ? 'Fine' : size === 22 ? 'Medium' : 'Thick'}
               </button>
             ))}
           </div>
@@ -189,10 +210,10 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }
             type="button"
             onClick={() => setShowGuide(!showGuide)}
             className={`text-[11px] transition-colors cursor-pointer ${
-              showGuide ? 'text-indigo-400 font-medium' : 'text-slate-500 hover:text-slate-400'
+              showGuide ? 'text-cyan-400 font-medium' : 'text-slate-500 hover:text-slate-400'
             }`}
           >
-            {showGuide ? 'Hide Grid' : 'Show Grid'}
+            {showGuide ? 'Hide Separators' : 'Show Separators'}
           </button>
           <button
             type="button"
@@ -207,13 +228,13 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }
         </div>
       </div>
 
-      {/* Drawing Canvas Container */}
-      <div className="relative touch-none overflow-hidden rounded-2xl border-2 border-slate-800 bg-black p-0 shadow-2xl transition-all hover:border-slate-700">
+      {/* Wide Drawing Canvas (560x240) */}
+      <div className="relative w-full max-w-[560px] touch-none overflow-hidden rounded-2xl border-2 border-slate-800 bg-black p-0 shadow-2xl transition-all hover:border-slate-700">
         <canvas
           ref={canvasRef}
-          width={320}
-          height={320}
-          className="block h-[280px] w-[280px] sm:h-[320px] sm:w-[320px] cursor-crosshair"
+          width={560}
+          height={240}
+          className="block w-full h-[180px] sm:h-[220px] md:h-[240px] cursor-crosshair object-contain"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -221,17 +242,11 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }
           onPointerCancel={handlePointerUp}
         />
 
-        {/* Centering crosshair grid */}
+        {/* 3-digit guide separators */}
         {showGuide && (
-          <div className="pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3 opacity-20">
-            <div className="border-r border-b border-indigo-400 border-dashed" />
-            <div className="border-r border-b border-indigo-400 border-dashed" />
-            <div className="border-b border-indigo-400 border-dashed" />
-            <div className="border-r border-b border-indigo-400 border-dashed" />
-            <div className="border-r border-b border-indigo-400 border-dashed" />
-            <div className="border-b border-indigo-400 border-dashed" />
-            <div className="border-r border-indigo-400 border-dashed" />
-            <div className="border-r border-indigo-400 border-dashed" />
+          <div className="pointer-events-none absolute inset-0 grid grid-cols-3 opacity-15">
+            <div className="border-r border-cyan-400 border-dashed" />
+            <div className="border-r border-cyan-400 border-dashed" />
             <div />
           </div>
         )}
@@ -239,30 +254,64 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }
         {/* Empty canvas hint */}
         {!hasDrawn && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-            <Sparkles className="h-6 w-6 text-slate-600 mb-2 animate-pulse" />
-            <p className="text-sm font-medium text-slate-500">Draw a single digit (0–9)</p>
-            <p className="text-[11px] text-slate-600 mt-0.5">Use your finger or mouse</p>
+            <Sparkles className="h-6 w-6 text-slate-600 mb-1.5 animate-pulse" />
+            <p className="text-sm font-semibold text-slate-400">
+              {targetType === 'numbers' ? 'Draw 1, 2, or 3 digits (e.g. 7, 42, 305)' : 'Draw letters (e.g. A, B, ABC)'}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {targetType === 'numbers' ? 'Leave clear gaps between digits' : 'Write thick, distinct letters'}
+            </p>
           </div>
         )}
       </div>
 
-      {/* Preset Quick Test Buttons */}
-      <div className="mt-3 flex items-center gap-1.5 text-xs text-slate-400">
-        <span className="text-[11px] text-slate-500">Quick samples:</span>
-        {['3', '7', '8', '5', '0'].map((digit) => (
-          <button
-            key={digit}
-            type="button"
-            onClick={() => drawPresetDigit(digit)}
-            className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-800 bg-slate-900 font-mono text-xs font-semibold text-slate-300 hover:border-slate-700 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
-          >
-            {digit}
-          </button>
-        ))}
+      {/* Mandatory Tip Under Canvas (Requirement 4) */}
+      <div className="mt-2.5 flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-1.5 text-xs text-cyan-300 w-full max-w-[560px]">
+        <Lightbulb className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
+        <span className="font-medium">
+          Tip:{' '}
+          {targetType === 'numbers'
+            ? 'Write digits with clear gaps between them'
+            : 'Write big, thick, separate letters'}
+        </span>
+      </div>
+
+      {/* Preset Quick Test Buttons (Requirement 6) */}
+      <div className="mt-3 flex flex-wrap items-center justify-between w-full max-w-[560px] text-xs text-slate-400">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-slate-500">Quick examples:</span>
+          {targetType === 'numbers' ? (
+            <>
+              {['7', '42', '305', '89', '100'].map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => drawPresetText(val)}
+                  className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 font-mono text-xs font-semibold text-slate-300 hover:border-slate-700 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+                >
+                  {val}
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              {['A', 'B', 'ABC', 'AI', 'OK'].map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => drawPresetText(val)}
+                  className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 font-mono text-xs font-semibold text-slate-300 hover:border-slate-700 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+                >
+                  {val}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Action Buttons: Detect and Clear */}
-      <div className="mt-5 flex w-full max-w-[340px] items-center gap-3">
+      <div className="mt-4 flex w-full max-w-[560px] items-center gap-3">
         <button
           type="button"
           onClick={initCanvas}
@@ -277,10 +326,16 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({ onDetect, isProcessing }
           type="button"
           onClick={handleDetectClick}
           disabled={!hasDrawn || isProcessing}
-          className="flex flex-[2] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-cyan-500 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-400 hover:via-indigo-500 hover:to-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-all active:scale-[0.98] cursor-pointer"
+          className="flex flex-[2] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-500/20 hover:from-cyan-400 hover:via-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-all active:scale-[0.98] cursor-pointer"
         >
           <Wand2 className="h-4 w-4" />
-          <span>{isProcessing ? 'Detecting...' : 'Detect Digit'}</span>
+          <span>
+            {isProcessing
+              ? 'Detecting...'
+              : targetType === 'numbers'
+              ? 'Detect Number'
+              : 'Detect Letters'}
+          </span>
         </button>
       </div>
     </div>
