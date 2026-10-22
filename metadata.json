@@ -1,0 +1,10 @@
+{
+  "name": "Number Detector - Neural Network Science Demo",
+  "description": "Interactive browser-based handwritten digit recognizer powered by TensorFlow.js, trained on MNIST with real-time draw and camera detection.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
