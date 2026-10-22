@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PenTool, Camera, UploadCloud, Sparkles, Cpu, RefreshCw, AlertCircle } from 'lucide-react';
+import { PenTool, Camera, UploadCloud, Sparkles, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { Header } from './components/Header.tsx';
 import { DrawCanvas } from './components/DrawCanvas.tsx';
 import { CameraDetector } from './components/CameraDetector.tsx';
@@ -15,6 +15,7 @@ import {
   trainAndSaveModel,
   predictDigit,
   resetSavedModel,
+  getCachedTestAccuracy,
 } from './services/mnistModel.ts';
 import { preprocessDigitCanvas } from './utils/imagePreprocessing.ts';
 import {
@@ -30,10 +31,12 @@ export default function App() {
   const [inputMode, setInputMode] = useState<InputMode>('draw');
   const [modelStatus, setModelStatus] = useState<'loading' | 'training' | 'ready' | 'error'>('loading');
   const [isCached, setIsCached] = useState<boolean>(false);
+  const [modelAccuracy, setModelAccuracy] = useState<number | null>(getCachedTestAccuracy());
+
   const [trainingProgress, setTrainingProgress] = useState<TrainingProgress>({
     status: 'idle',
     currentEpoch: 0,
-    totalEpochs: 4,
+    totalEpochs: 3,
     currentBatch: 0,
     totalBatches: 0,
     progressPercent: 0,
@@ -98,6 +101,8 @@ export default function App() {
           if (loaded) {
             setIsCached(true);
             setModelStatus('ready');
+            const acc = getCachedTestAccuracy();
+            if (acc) setModelAccuracy(acc);
             return;
           }
         }
@@ -106,12 +111,13 @@ export default function App() {
       // If not cached or forceRetrain is true: Train from scratch
       setModelStatus('training');
       setIsCached(false);
-      await trainAndSaveModel((progress) => {
+      const { testAccuracy } = await trainAndSaveModel((progress) => {
         setTrainingProgress({ ...progress });
       });
 
       setIsCached(true);
       setModelStatus('ready');
+      setModelAccuracy(testAccuracy);
     } catch (err: any) {
       console.error('Model initialization error:', err);
       setModelStatus('error');
@@ -186,6 +192,7 @@ export default function App() {
   const handleClearStorage = async () => {
     await resetSavedModel();
     setIsCached(false);
+    setModelAccuracy(null);
     await initModel(true);
   };
 
@@ -202,6 +209,7 @@ export default function App() {
       <Header
         modelStatus={modelStatus}
         isCached={isCached}
+        modelAccuracy={modelAccuracy}
         onOpenModelInfo={() => setIsModelInfoOpen(true)}
         onScrollToExplanation={scrollToExplanation}
       />
@@ -226,6 +234,15 @@ export default function App() {
           <p className="mt-3.5 text-xs sm:text-sm text-slate-300 leading-relaxed text-balance max-w-2xl mx-auto font-normal">
             Shahmeer Detect AI is an AI-powered app that detects handwritten numbers and printed text using drawing, camera scanning, and image uploads. Designed for smart learning and innovation, it makes AI detection simple, fast, and user-friendly.
           </p>
+
+          {/* Accuracy Proof Badge */}
+          {modelAccuracy !== null && (
+            <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-950/30 px-3 py-1 text-xs font-mono text-emerald-300">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Model accuracy: {modelAccuracy}%</span>
+              <span className="text-[10px] text-slate-400 hidden sm:inline">(tested on 500 unseen MNIST digits)</span>
+            </div>
+          )}
         </div>
 
         {/* Global Model Error Warning if any */}
@@ -358,6 +375,7 @@ export default function App() {
       <TrainingModal
         progress={trainingProgress}
         onRetry={() => initModel(true)}
+        onClose={() => setTrainingProgress((prev) => ({ ...prev, status: 'idle' }))}
       />
 
       {/* Model Architecture & IndexedDB Inspector Modal */}

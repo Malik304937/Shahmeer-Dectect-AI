@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as tf from '@tensorflow/tfjs';
-import { X, Cpu, RefreshCw, Trash2, CheckCircle2, HardDrive, Layers, Activity } from 'lucide-react';
-import { MODEL_STORAGE_KEY } from '../services/mnistModel.ts';
+import { X, Cpu, RefreshCw, Trash2, HardDrive, Award } from 'lucide-react';
+import { getCachedTestAccuracy } from '../services/mnistModel.ts';
 
 interface ModelInfoModalProps {
   isOpen: boolean;
@@ -19,6 +19,7 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
   onClearStorage,
 }) => {
   const [memoryInfo, setMemoryInfo] = useState<{ numTensors: number; numBytes: number } | null>(null);
+  const testAcc = getCachedTestAccuracy();
 
   useEffect(() => {
     if (isOpen) {
@@ -37,17 +38,16 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
   if (!isOpen) return null;
 
   const layersList = [
-    { name: 'conv2d_1', type: 'Conv2D (16 filters, 3×3)', shape: '[None, 26, 26, 16]', params: 160 },
-    { name: 'max_pooling2d_1', type: 'MaxPooling2D (2×2)', shape: '[None, 13, 13, 16]', params: 0 },
-    { name: 'conv2d_2', type: 'Conv2D (32 filters, 3×3)', shape: '[None, 11, 11, 32]', params: 4640 },
-    { name: 'max_pooling2d_2', type: 'MaxPooling2D (2×2)', shape: '[None, 5, 5, 32]', params: 0 },
-    { name: 'flatten_1', type: 'Flatten', shape: '[None, 800]', params: 0 },
-    { name: 'dense_1', type: 'Dense (ReLU)', shape: '[None, 64]', params: 51264 },
-    { name: 'dropout_1', type: 'Dropout (rate=0.25)', shape: '[None, 64]', params: 0 },
-    { name: 'dense_2 (output)', type: 'Dense (Softmax)', shape: '[None, 10]', params: 650 },
+    { name: 'conv2d_1', type: 'Conv2D (8 filters, 3×3, ReLU)', shape: '[None, 26, 26, 8]', params: 80 },
+    { name: 'max_pooling2d_1', type: 'MaxPooling2D (2×2)', shape: '[None, 13, 13, 8]', params: 0 },
+    { name: 'conv2d_2', type: 'Conv2D (16 filters, 3×3, ReLU)', shape: '[None, 11, 11, 16]', params: 1168 },
+    { name: 'max_pooling2d_2', type: 'MaxPooling2D (2×2)', shape: '[None, 5, 5, 16]', params: 0 },
+    { name: 'flatten_1', type: 'Flatten', shape: '[None, 400]', params: 0 },
+    { name: 'dense_1', type: 'Dense (32 units, ReLU)', shape: '[None, 32]', params: 12832 },
+    { name: 'dense_2 (output)', type: 'Dense (10 units, Softmax)', shape: '[None, 10]', params: 330 },
   ];
 
-  const totalParams = 56714;
+  const totalParams = 14410;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
@@ -55,12 +55,12 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
               <Cpu className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">Neural Network Architecture</h3>
-              <p className="text-xs text-slate-400">TensorFlow.js CNN Specification</p>
+              <h3 className="text-base font-bold text-white">Lightweight CNN Architecture</h3>
+              <p className="text-xs text-slate-400">Adam (lr = 0.003) · WebGL Acceleration</p>
             </div>
           </div>
           <button
@@ -76,7 +76,7 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
             <span className="text-[11px] font-medium text-slate-400 block">Total Parameters</span>
             <span className="font-mono text-sm font-bold text-white tabular-nums">
-              {totalParams.toLocaleString()}
+              {totalParams.toLocaleString()} (Lightweight)
             </span>
           </div>
 
@@ -91,10 +91,13 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <span className="text-[11px] font-medium text-slate-400 block">GPU Memory</span>
-            <span className="font-mono text-xs font-bold text-cyan-400 tabular-nums">
-              {memoryInfo ? `${(memoryInfo.numBytes / (1024 * 1024)).toFixed(1)} MB` : 'Active'}
-            </span>
+            <span className="text-[11px] font-medium text-slate-400 block">500-Test Accuracy</span>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <Award className="h-3.5 w-3.5 text-cyan-400" />
+              <span className="font-mono text-xs font-bold text-cyan-300 tabular-nums">
+                {testAcc ? `${testAcc}%` : 'Trained'}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -112,7 +115,9 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
               >
                 <div>
                   <span className="font-mono font-medium text-slate-200 block">{layer.type}</span>
-                  <span className="text-[10px] text-slate-400 font-mono">{layer.name} · {layer.params.toLocaleString()} params</span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {layer.name} · {layer.params.toLocaleString()} params
+                  </span>
                 </div>
                 <span className="font-mono text-slate-400 text-[11px]">{layer.shape}</span>
               </div>
@@ -139,10 +144,10 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
                 onClose();
                 onRetrain();
               }}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-500 transition-colors cursor-pointer shadow-sm shadow-indigo-500/20"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-xs font-bold text-white hover:bg-cyan-500 transition-colors cursor-pointer shadow-sm shadow-cyan-500/20"
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              <span>Retrain Model (12,000 MNIST)</span>
+              <span>Retrain Fast Model (8,000 MNIST)</span>
             </button>
           </div>
         </div>

@@ -1,24 +1,41 @@
 import * as tf from '@tensorflow/tfjs';
-import { loadMnistSubset, NUM_CLASSES } from './mnistData.ts';
+import { loadMnistTrainAndTest, NUM_CLASSES } from './mnistData.ts';
 import { TrainingProgress } from '../types.ts';
 
 export const MODEL_STORAGE_KEY = 'indexeddb://number-detector-mnist-model';
-export const NUM_TRAIN_SAMPLES = 12000;
-export const NUM_EPOCHS = 4;
-export const BATCH_SIZE = 128;
+export const NUM_TRAIN_SAMPLES = 8000;
+export const NUM_TEST_SAMPLES = 500;
+export const NUM_EPOCHS = 3;
+export const BATCH_SIZE = 64;
 
 let activeModel: tf.LayersModel | null = null;
+let cachedTestAccuracy: number | null = null;
 
 /**
- * Creates the small CNN architecture optimized for MNIST digit classification.
+ * Creates the lightweight CNN architecture requested:
+ * Conv2D(8 filters, 3x3, relu) -> MaxPool -> Conv2D(16 filters, 3x3, relu) -> MaxPool -> Flatten -> Dense(32, relu) -> Dense(10, softmax)
+ * Compiled with Adam(0.003).
  */
 export function createCNNModel(): tf.LayersModel {
   const model = tf.sequential();
 
-  // Layer 1: Convolutional feature detector for edges & arcs
+  // Layer 1: Conv2D(8 filters, 3x3, relu)
   model.add(
     tf.layers.conv2d({
       inputShape: [28, 28, 1],
+      kernelSize: 3,
+      filters: 8,
+      activation: 'relu',
+      kernelInitializer: 'varianceScaling',
+    })
+  );
+
+  // Layer 2: MaxPool
+  model.add(tf.layers.maxPooling2d({ poolSize: [2, 2] }));
+
+  // Layer 3: Conv2D(16 filters, 3x3, relu)
+  model.add(
+    tf.layers.conv2d({
       kernelSize: 3,
       filters: 16,
       activation: 'relu',
@@ -26,28 +43,16 @@ export function createCNNModel(): tf.LayersModel {
     })
   );
 
-  // Layer 2: Spatial pooling
+  // Layer 4: MaxPool
   model.add(tf.layers.maxPooling2d({ poolSize: [2, 2] }));
 
-  // Layer 3: Higher-order feature detector for loops & junctions
-  model.add(
-    tf.layers.conv2d({
-      kernelSize: 3,
-      filters: 32,
-      activation: 'relu',
-      kernelInitializer: 'varianceScaling',
-    })
-  );
-
-  // Layer 4: Spatial pooling
-  model.add(tf.layers.maxPooling2d({ poolSize: [2, 2] }));
-
-  // Layer 5: Flatten and Dense representation
+  // Layer 5: Flatten
   model.add(tf.layers.flatten());
-  model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
-  model.add(tf.layers.dropout({ rate: 0.25 }));
 
-  // Output Layer: 10 probabilities summing to 1.0
+  // Layer 6: Dense(32, relu)
+  model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
+
+  // Layer 7: Dense(10, softmax)
   model.add(
     tf.layers.dense({
       units: 10,
@@ -56,8 +61,9 @@ export function createCNNModel(): tf.LayersModel {
     })
   );
 
+  // Compiled with Adam optimizer learning rate 0.003
   model.compile({
-    optimizer: tf.train.adam(0.001),
+    optimizer: tf.train.adam(0.003),
     loss: 'categoricalCrossentropy',
     metrics: ['accuracy'],
   });
@@ -83,6 +89,14 @@ export async function isModelCached(): Promise<boolean> {
  */
 export async function loadCachedModel(): Promise<tf.LayersModel | null> {
   try {
+    // Ensure WebGL backend is used
+    try {
+      await tf.setBackend('webgl');
+    } catch (e) {
+      console.warn('Could not set webgl backend:', e);
+    }
+    await tf.ready();
+
     const cached = await isModelCached();
     if (!cached) return null;
 
@@ -94,6 +108,13 @@ export async function loadCachedModel(): Promise<tf.LayersModel | null> {
     });
 
     activeModel = model;
+
+    // Check if test accuracy was stored
+    const savedAcc = localStorage.getItem('shahmeer_model_accuracy');
+    if (savedAcc) {
+      cachedTestAccuracy = parseFloat(savedAcc);
+    }
+
     return model;
   } catch (error) {
     console.warn('Failed to load model from IndexedDB:', error);
@@ -102,21 +123,29 @@ export async function loadCachedModel(): Promise<tf.LayersModel | null> {
 }
 
 /**
- * Trains the CNN on 12,000 MNIST images for 4 epochs in the browser
- * and saves to IndexedDB on completion.
+ * Trains the CNN on 8,000 MNIST images for 3 epochs with batch size 64,
+ * updates progress every 10 batches and per epoch, tests on 500 unseen images,
+ * and saves to IndexedDB.
  */
 export async function trainAndSaveModel(
   onProgress: (progress: TrainingProgress) => void
-): Promise<tf.LayersModel> {
-  // Ensure WebGL backend is initialized
+): Promise<{ model: tf.LayersModel; testAccuracy: number }> {
+  // 4. Await tf.ready() and make sure WebGL backend is used
+  try {
+    await tf.setBackend('webgl');
+  } catch (e) {
+    console.warn('WebGL backend unavailable, defaulting to:', tf.getBackend());
+  }
   await tf.ready();
+
+  const totalBatches = Math.ceil(NUM_TRAIN_SAMPLES / BATCH_SIZE);
 
   const progressState: TrainingProgress = {
     status: 'downloading',
     currentEpoch: 0,
     totalEpochs: NUM_EPOCHS,
     currentBatch: 0,
-    totalBatches: Math.ceil(NUM_TRAIN_SAMPLES / BATCH_SIZE),
+    totalBatches,
     progressPercent: 0,
     epochAccuracies: [],
     epochLosses: [],
@@ -124,39 +153,40 @@ export async function trainAndSaveModel(
 
   onProgress({ ...progressState });
 
-  // 1. Fetch data
-  let dataset;
+  // 1. Fetch 8,000 training + 500 test images
+  let data;
   try {
-    dataset = await loadMnistSubset(NUM_TRAIN_SAMPLES, (stage, pct, msg) => {
+    data = await loadMnistTrainAndTest(NUM_TRAIN_SAMPLES, NUM_TEST_SAMPLES, (stage, pct, msg) => {
       onProgress({
         ...progressState,
         status: stage,
-        progressPercent: Math.round(pct * 0.4), // First 40% is download & preparation
+        progressPercent: Math.round(pct * 0.35), // First 35% is download & slice
       });
     });
   } catch (err: any) {
     onProgress({
       ...progressState,
       status: 'error',
-      errorMessage: err.message || 'Failed to download MNIST training data.',
+      errorMessage: err.message || 'Failed to download MNIST data.',
     });
     throw err;
   }
 
   // 2. Prepare Tensors
   progressState.status = 'training';
-  progressState.progressPercent = 40;
+  progressState.progressPercent = 35;
   onProgress({ ...progressState });
 
-  const xs = tf.tensor4d(dataset.xs, [dataset.numExamples, 28, 28, 1]);
-  const ys = tf.tensor2d(dataset.ys, [dataset.numExamples, NUM_CLASSES]);
+  const trainXs = tf.tensor4d(data.trainXs, [data.numTrain, 28, 28, 1]);
+  const trainYs = tf.tensor2d(data.trainYs, [data.numTrain, NUM_CLASSES]);
+  const testXs = tf.tensor4d(data.testXs, [data.numTest, 28, 28, 1]);
+  const testYs = tf.tensor2d(data.testYs, [data.numTest, NUM_CLASSES]);
 
   const model = createCNNModel();
-  const totalBatches = Math.ceil(dataset.numExamples / BATCH_SIZE);
 
   // 3. Train the model
   try {
-    await model.fit(xs, ys, {
+    await model.fit(trainXs, trainYs, {
       batchSize: BATCH_SIZE,
       epochs: NUM_EPOCHS,
       shuffle: true,
@@ -166,23 +196,30 @@ export async function trainAndSaveModel(
           onProgress({ ...progressState });
           await tf.nextFrame();
         },
+        // 5. Update progress UI only every 10 batches and at end of each epoch
         onBatchEnd: async (batch, logs) => {
-          progressState.currentBatch = batch + 1;
-          progressState.totalBatches = totalBatches;
-          progressState.currentLoss = logs?.loss ?? 0;
-          progressState.currentAccuracy = logs?.acc ?? 0;
+          const isEvery10 = (batch + 1) % 10 === 0;
+          const isLast = batch + 1 === totalBatches;
 
-          // Training spans 40% to 95% of total progress
-          const epochBase = 40 + ((progressState.currentEpoch - 1) / NUM_EPOCHS) * 55;
-          const batchAdd = ((batch + 1) / totalBatches) * (55 / NUM_EPOCHS);
-          progressState.progressPercent = Math.min(95, Math.round(epochBase + batchAdd));
+          if (isEvery10 || isLast) {
+            progressState.currentBatch = batch + 1;
+            if (logs?.loss !== undefined) progressState.currentLoss = logs.loss;
 
-          onProgress({ ...progressState });
-          await tf.nextFrame();
+            // Training progress spans 35% to 85%
+            const epochBase = 35 + ((progressState.currentEpoch - 1) / NUM_EPOCHS) * 50;
+            const batchAdd = ((batch + 1) / totalBatches) * (50 / NUM_EPOCHS);
+            progressState.progressPercent = Math.min(85, Math.round(epochBase + batchAdd));
+
+            onProgress({ ...progressState });
+            await tf.nextFrame();
+          }
         },
+        // 7. Show real epoch accuracy (not just the last-batch value)
         onEpochEnd: async (epoch, logs) => {
           if (logs?.acc !== undefined) {
-            progressState.epochAccuracies.push(Number((logs.acc * 100).toFixed(1)));
+            const realEpochAcc = Number((logs.acc * 100).toFixed(1));
+            progressState.epochAccuracies.push(realEpochAcc);
+            progressState.currentAccuracy = logs.acc;
           }
           if (logs?.loss !== undefined) {
             progressState.epochLosses.push(Number(logs.loss.toFixed(4)));
@@ -192,34 +229,58 @@ export async function trainAndSaveModel(
         },
       },
     });
+
+    // 9. Run a quick test on 500 unseen MNIST images and measure accuracy
+    progressState.status = 'testing';
+    progressState.progressPercent = 88;
+    onProgress({ ...progressState });
+    await tf.nextFrame();
+
+    const evalResult = model.evaluate(testXs, testYs, { batchSize: 64 }) as tf.Scalar[];
+    const testLoss = (await evalResult[0].data())[0];
+    const testAcc = (await evalResult[1].data())[0];
+
+    // Dispose evaluation tensors
+    evalResult[0].dispose();
+    evalResult[1].dispose();
+
+    const finalTestAccuracy = Number((testAcc * 100).toFixed(1));
+    progressState.testAccuracy = finalTestAccuracy;
+    cachedTestAccuracy = finalTestAccuracy;
+    try {
+      localStorage.setItem('shahmeer_model_accuracy', String(finalTestAccuracy));
+    } catch (e) {
+      console.warn('Could not save accuracy to localStorage:', e);
+    }
+
+    // 8. Save trained model to IndexedDB so training never runs again on same device
+    progressState.status = 'saving';
+    progressState.progressPercent = 96;
+    onProgress({ ...progressState });
+
+    try {
+      await model.save(MODEL_STORAGE_KEY);
+    } catch (saveErr) {
+      console.warn('Could not save model to IndexedDB:', saveErr);
+    }
+
+    progressState.status = 'ready';
+    progressState.progressPercent = 100;
+    onProgress({ ...progressState });
+
+    activeModel = model;
+    return { model, testAccuracy: finalTestAccuracy };
   } finally {
-    // Dispose training tensors to free memory
-    xs.dispose();
-    ys.dispose();
+    // 6. Dispose of unused tensors with tf.tidy() and tensor.dispose()
+    trainXs.dispose();
+    trainYs.dispose();
+    testXs.dispose();
+    testYs.dispose();
   }
-
-  // 4. Save to IndexedDB
-  progressState.status = 'saving';
-  progressState.progressPercent = 98;
-  onProgress({ ...progressState });
-
-  try {
-    await model.save(MODEL_STORAGE_KEY);
-  } catch (saveErr) {
-    console.warn('Could not save model to IndexedDB, will keep in memory:', saveErr);
-  }
-
-  progressState.status = 'ready';
-  progressState.progressPercent = 100;
-  onProgress({ ...progressState });
-
-  activeModel = model;
-  return model;
 }
 
 /**
- * Predict a single 28x28 grayscale image.
- * Expected input: Float32Array of 784 normalized values in [0, 1].
+ * Predict a single 28x28 grayscale image using tf.tidy to avoid leaks.
  */
 export async function predictDigit(normalizedPixels: Float32Array): Promise<{
   digit: number;
@@ -227,14 +288,14 @@ export async function predictDigit(normalizedPixels: Float32Array): Promise<{
   probabilities: number[];
 }> {
   if (!activeModel) {
-    // Attempt to load from storage
     activeModel = await loadCachedModel();
     if (!activeModel) {
       throw new Error('No trained neural network model is loaded in memory.');
     }
   }
 
-  const { digit, confidence, probabilities } = tf.tidy(() => {
+  // 6. Dispose of unused tensors with tf.tidy()
+  const result = tf.tidy(() => {
     const inputTensor = tf.tensor4d(normalizedPixels, [1, 28, 28, 1]);
     const outputTensor = activeModel!.predict(inputTensor) as tf.Tensor;
     const probs = outputTensor.dataSync();
@@ -259,7 +320,7 @@ export async function predictDigit(normalizedPixels: Float32Array): Promise<{
     };
   });
 
-  return { digit, confidence, probabilities };
+  return result;
 }
 
 /**
@@ -269,6 +330,8 @@ export async function resetSavedModel(): Promise<void> {
   try {
     await tf.io.removeModel(MODEL_STORAGE_KEY);
     activeModel = null;
+    cachedTestAccuracy = null;
+    localStorage.removeItem('shahmeer_model_accuracy');
   } catch (e) {
     console.warn('Failed to remove model from IndexedDB:', e);
   }
@@ -276,4 +339,8 @@ export async function resetSavedModel(): Promise<void> {
 
 export function getActiveModel(): tf.LayersModel | null {
   return activeModel;
+}
+
+export function getCachedTestAccuracy(): number | null {
+  return cachedTestAccuracy;
 }

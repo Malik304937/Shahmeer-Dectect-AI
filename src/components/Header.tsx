@@ -1,10 +1,11 @@
 import React from 'react';
-import { Cpu, BookOpen } from 'lucide-react';
+import { Cpu, BookOpen, Award } from 'lucide-react';
 import { AppLogo } from './AppLogo.tsx';
 
 interface HeaderProps {
   modelStatus: 'ready' | 'loading' | 'training' | 'error';
   isCached: boolean;
+  modelAccuracy?: number | null;
   onOpenModelInfo: () => void;
   onScrollToExplanation: () => void;
 }
@@ -12,6 +13,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   modelStatus,
   isCached,
+  modelAccuracy,
   onOpenModelInfo,
   onScrollToExplanation,
 }) => {
@@ -53,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
             title="Inspect neural network model architecture or retrain"
           >
             <Cpu className="h-3.5 w-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">CNN Model</span>
+            <span className="hidden sm:inline">CNN</span>
             <span
               className={`inline-block h-2 w-2 rounded-full ${
                 modelStatus === 'ready'
@@ -63,7 +65,13 @@ export const Header: React.FC<HeaderProps> = ({
                   : 'bg-rose-400'
               }`}
             />
-            {isCached && <span className="text-[10px] text-slate-400 hidden lg:inline">Cached</span>}
+            {modelAccuracy !== null && modelAccuracy !== undefined ? (
+              <span className="font-mono text-[11px] text-emerald-300 font-semibold hidden md:inline">
+                Model accuracy: {modelAccuracy}%
+              </span>
+            ) : isCached ? (
+              <span className="text-[10px] text-slate-400 hidden lg:inline">IndexedDB</span>
+            ) : null}
           </button>
         </div>
       </div>

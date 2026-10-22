@@ -23,7 +23,7 @@ export interface PredictionResult {
 }
 
 export interface TrainingProgress {
-  status: 'idle' | 'downloading' | 'preparing' | 'training' | 'saving' | 'ready' | 'error';
+  status: 'idle' | 'downloading' | 'preparing' | 'training' | 'testing' | 'saving' | 'ready' | 'error';
   currentEpoch: number;
   totalEpochs: number;
   currentBatch: number;
@@ -33,6 +33,7 @@ export interface TrainingProgress {
   currentAccuracy?: number;
   epochAccuracies: number[];
   epochLosses: number[];
+  testAccuracy?: number; // accuracy on 500 unseen images
   errorMessage?: string;
   loadedFromCache?: boolean;
 }
