@@ -305,17 +305,17 @@ export default function App() {
 
           {/* Accuracy Proof Badge */}
           {modelAccuracy !== null && (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-950/30 px-3 py-1 text-xs font-mono text-emerald-300">
+            <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-950/30 px-3 py-1 text-xs font-mono text-emerald-400">
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
               <span>Model accuracy: {modelAccuracy}%</span>
-              <span className="text-[10px] text-slate-400 hidden sm:inline">(tested on 500 unseen MNIST digits)</span>
+              <span className="text-xs text-slate-400 hidden sm:inline">(tested on 500 unseen MNIST digits)</span>
             </div>
           )}
         </div>
 
         {/* Global Model Error Warning if any */}
         {modelStatus === 'error' && (
-          <div className="mb-6 rounded-2xl border border-rose-900/60 bg-rose-950/30 p-4 text-xs text-rose-300 flex items-center justify-between gap-4">
+          <div className="mb-6 rounded-2xl border border-rose-900/60 bg-rose-950/30 p-4 text-xs text-rose-400 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-rose-400 shrink-0" />
               <span>CNN Model failed to initialize. Check network connection or retry.</span>
@@ -336,8 +336,8 @@ export default function App() {
           <div className="lg:col-span-6 flex flex-col rounded-2xl border border-slate-800 bg-slate-900/40 p-5 sm:p-6 backdrop-blur-sm">
             {/* Mode Switch: Numbers vs Letters (Requirement 1) */}
             <div className="mb-4 flex flex-col items-center">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                Recognition Mode
+              <span className="text-xs font-medium text-slate-400 mb-1.5">
+                Recognition mode
               </span>
               <div className="inline-flex items-center rounded-2xl bg-slate-950/90 p-1.5 border border-slate-800 shadow-inner">
                 <button
@@ -354,7 +354,7 @@ export default function App() {
                 >
                   <Hash className="h-4 w-4" />
                   <span>Numbers</span>
-                  <span className="text-[10px] opacity-75 font-mono ml-0.5">(1–3 digits)</span>
+                  <span className="text-xs opacity-80 font-mono ml-0.5">(1–3 digits)</span>
                 </button>
                 <button
                   type="button"
@@ -370,7 +370,7 @@ export default function App() {
                 >
                   <Type className="h-4 w-4" />
                   <span>Letters</span>
-                  <span className="text-[10px] opacity-75 font-mono ml-0.5">(A–Z, words)</span>
+                  <span className="text-xs opacity-80 font-mono ml-0.5">(A–Z, words)</span>
                 </button>
               </div>
             </div>

@@ -162,45 +162,38 @@ export const CameraDetector: React.FC<CameraDetectorProps> = ({
   return (
     <div className="flex flex-col items-center w-full max-w-[560px] mx-auto">
       {/* Camera Controls Bar */}
-      <div className="mb-3 flex w-full items-center justify-between text-xs text-slate-400">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-medium text-slate-400">Contrast:</span>
-          <div className="flex items-center gap-1 rounded-lg bg-slate-900/90 p-1 border border-slate-800">
-            <button
-              type="button"
-              onClick={() => setContrastMode('auto')}
-              className={`rounded px-2.5 py-0.5 text-[11px] font-semibold transition-colors cursor-pointer ${
-                contrastMode === 'auto'
-                  ? 'bg-cyan-600 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Auto
-            </button>
-            <button
-              type="button"
-              onClick={() => setContrastMode('inverted')}
-              title="Black ink on white paper"
-              className={`rounded px-2.5 py-0.5 text-[11px] font-semibold transition-colors cursor-pointer ${
-                contrastMode === 'inverted'
-                  ? 'bg-cyan-600 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Paper
-            </button>
-            <button
-              type="button"
-              onClick={() => setContrastMode('normal')}
-              title="White digit on dark surface"
-              className={`rounded px-2.5 py-0.5 text-[11px] font-semibold transition-colors cursor-pointer ${
-                contrastMode === 'normal'
-                  ? 'bg-cyan-600 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Chalk
-            </button>
+      <div className="mb-3 flex w-full items-center justify-between gap-2 text-xs text-slate-400">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-400">Contrast:</span>
+          <div
+            role="radiogroup"
+            aria-label="Camera contrast mode"
+            className="inline-flex items-center gap-1 rounded-xl bg-slate-950/90 p-1 border border-slate-800 shadow-inner"
+          >
+            {[
+              { id: 'auto', label: 'Auto', title: 'Automatic contrast detection' },
+              { id: 'inverted', label: 'Paper', title: 'Black ink on white paper' },
+              { id: 'normal', label: 'Chalk', title: 'White digit on dark surface' },
+            ].map(({ id, label, title }) => {
+              const isSelected = contrastMode === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  onClick={() => setContrastMode(id as any)}
+                  title={title}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-cyan-600 text-white shadow-sm border border-cyan-500/40'
+                      : 'border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -209,8 +202,10 @@ export const CameraDetector: React.FC<CameraDetectorProps> = ({
             <button
               type="button"
               onClick={toggleTorch}
-              className={`flex items-center gap-1 text-[11px] transition-colors cursor-pointer ${
-                torchOn ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'
+              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
+                torchOn
+                  ? 'border-amber-500/40 bg-amber-950/30 text-amber-400'
+                  : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-white'
               }`}
               title="Toggle Flashlight"
             >
@@ -299,7 +294,7 @@ export const CameraDetector: React.FC<CameraDetectorProps> = ({
               <div className="absolute top-1/2 left-0 w-full h-[1px] bg-cyan-400/30 -translate-y-1/2 border-dashed" />
 
               {/* Alignment Tip */}
-              <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900/90 px-2.5 py-0.5 text-[10px] font-medium text-cyan-300 backdrop-blur-sm border border-cyan-500/20">
+              <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900/90 px-3 py-1 text-xs font-medium text-cyan-400 backdrop-blur-sm border border-cyan-500/20 shadow-md">
                 {targetType === 'numbers' ? 'Hold 1–3 digits with clear gaps' : 'Hold letters inside frame'}
               </div>
             </div>

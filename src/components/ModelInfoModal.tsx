@@ -72,16 +72,16 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
         </div>
 
         {/* Quick Stats Grid */}
-        <div className="my-5 grid grid-cols-3 gap-3">
+        <div className="my-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <span className="text-[11px] font-medium text-slate-400 block">Total Parameters</span>
+            <span className="text-xs font-medium text-slate-400 block">Total Parameters</span>
             <span className="font-mono text-sm font-bold text-white tabular-nums">
               {totalParams.toLocaleString()} (Lightweight)
             </span>
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <span className="text-[11px] font-medium text-slate-400 block">Storage Cache</span>
+            <span className="text-xs font-medium text-slate-400 block">Storage Cache</span>
             <div className="flex items-center gap-1.5 mt-0.5">
               <HardDrive className="h-3.5 w-3.5 text-emerald-400" />
               <span className="font-mono text-xs font-bold text-emerald-400">
@@ -91,10 +91,10 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <span className="text-[11px] font-medium text-slate-400 block">500-Test Accuracy</span>
+            <span className="text-xs font-medium text-slate-400 block">500-Test Accuracy</span>
             <div className="flex items-center gap-1.5 mt-0.5">
               <Award className="h-3.5 w-3.5 text-cyan-400" />
-              <span className="font-mono text-xs font-bold text-cyan-300 tabular-nums">
+              <span className="font-mono text-xs font-bold text-cyan-400 tabular-nums">
                 {testAcc ? `${testAcc}%` : 'Trained'}
               </span>
             </div>
@@ -115,11 +115,11 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
               >
                 <div>
                   <span className="font-mono font-medium text-slate-200 block">{layer.type}</span>
-                  <span className="text-[10px] text-slate-400 font-mono">
+                  <span className="text-xs text-slate-400 font-mono">
                     {layer.name} · {layer.params.toLocaleString()} params
                   </span>
                 </div>
-                <span className="font-mono text-slate-400 text-[11px]">{layer.shape}</span>
+                <span className="font-mono text-slate-400 text-xs">{layer.shape}</span>
               </div>
             ))}
           </div>
@@ -128,11 +128,12 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
         {/* Action Buttons */}
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-800/80 pt-4">
           <button
+            type="button"
             onClick={() => {
               onClearStorage();
               onClose();
             }}
-            className="flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-300 transition-colors cursor-pointer self-start sm:self-auto"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-medium text-rose-400 hover:border-rose-900/60 hover:bg-rose-950/30 transition-colors cursor-pointer self-start sm:self-auto"
           >
             <Trash2 className="h-3.5 w-3.5" />
             <span>Clear IndexedDB Cache</span>
@@ -140,11 +141,12 @@ export const ModelInfoModal: React.FC<ModelInfoModalProps> = ({
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
+              type="button"
               onClick={() => {
                 onClose();
                 onRetrain();
               }}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-xs font-bold text-white hover:bg-cyan-500 transition-colors cursor-pointer shadow-sm shadow-cyan-500/20"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-xs font-semibold text-white hover:bg-cyan-500 transition-colors cursor-pointer shadow-sm shadow-cyan-500/20"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               <span>Retrain Fast Model (8,000 MNIST)</span>

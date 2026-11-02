@@ -184,24 +184,37 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({
   return (
     <div className="flex flex-col items-center w-full">
       {/* Top canvas controls bar */}
-      <div className="mb-3 flex w-full max-w-[560px] items-center justify-between text-xs text-slate-400">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-medium text-slate-400">Stroke:</span>
-          <div className="flex items-center gap-1 rounded-lg bg-slate-900/90 p-1 border border-slate-800">
-            {[16, 22, 28].map((size) => (
-              <button
-                key={size}
-                type="button"
-                onClick={() => setStrokeWidth(size)}
-                className={`rounded px-2.5 py-0.5 text-[11px] font-semibold transition-colors cursor-pointer ${
-                  strokeWidth === size
-                    ? 'bg-cyan-600 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {size === 16 ? 'Fine' : size === 22 ? 'Medium' : 'Thick'}
-              </button>
-            ))}
+      <div className="mb-3 flex w-full max-w-[560px] flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-400">Stroke:</span>
+          <div
+            role="radiogroup"
+            aria-label="Brush stroke weight"
+            className="inline-flex items-center gap-1 rounded-xl bg-slate-950/90 p-1 border border-slate-800 shadow-inner"
+          >
+            {[
+              { size: 16, label: 'Fine' },
+              { size: 22, label: 'Medium' },
+              { size: 28, label: 'Thick' },
+            ].map(({ size, label }) => {
+              const isSelected = strokeWidth === size;
+              return (
+                <button
+                  key={size}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  onClick={() => setStrokeWidth(size)}
+                  className={`rounded-lg px-3 py-1 text-xs font-medium transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-cyan-600 text-white shadow-sm border border-cyan-500/40'
+                      : 'border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -209,8 +222,10 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({
           <button
             type="button"
             onClick={() => setShowGuide(!showGuide)}
-            className={`text-[11px] transition-colors cursor-pointer ${
-              showGuide ? 'text-cyan-400 font-medium' : 'text-slate-500 hover:text-slate-400'
+            className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
+              showGuide
+                ? 'border-cyan-500/40 bg-cyan-950/30 text-cyan-400'
+                : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-white'
             }`}
           >
             {showGuide ? 'Hide Separators' : 'Show Separators'}
@@ -219,10 +234,10 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({
             type="button"
             onClick={undo}
             disabled={strokeHistoryRef.current.length === 0}
-            className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/60 px-2.5 py-1 text-xs font-medium text-slate-400 hover:border-slate-700 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
             title="Undo stroke"
           >
-            <RotateCcw className="h-3 w-3" />
+            <RotateCcw className="h-3.5 w-3.5" />
             <span>Undo</span>
           </button>
         </div>
@@ -258,7 +273,7 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({
             <p className="text-sm font-semibold text-slate-400">
               {targetType === 'numbers' ? 'Draw 1, 2, or 3 digits (e.g. 7, 42, 305)' : 'Draw letters (e.g. A, B, ABC)'}
             </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               {targetType === 'numbers' ? 'Leave clear gaps between digits' : 'Write thick, distinct letters'}
             </p>
           </div>
@@ -266,7 +281,7 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({
       </div>
 
       {/* Mandatory Tip Under Canvas (Requirement 4) */}
-      <div className="mt-2.5 flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-1.5 text-xs text-cyan-300 w-full max-w-[560px]">
+      <div className="mt-2.5 flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-1.5 text-xs text-cyan-400 w-full max-w-[560px]">
         <Lightbulb className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
         <span className="font-medium">
           Tip:{' '}
@@ -276,10 +291,10 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({
         </span>
       </div>
 
-      {/* Preset Quick Test Buttons (Requirement 6) */}
-      <div className="mt-3 flex flex-wrap items-center justify-between w-full max-w-[560px] text-xs text-slate-400">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-slate-500">Quick examples:</span>
+      {/* Preset Quick Test Buttons (Requirement 6 & Issue 10) */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 w-full max-w-[560px] text-xs text-slate-400">
+        <span className="text-xs font-medium text-slate-400">Quick examples:</span>
+        <div className="flex flex-wrap items-center gap-2">
           {targetType === 'numbers' ? (
             <>
               {['7', '42', '305', '89', '100'].map((val) => (
@@ -287,7 +302,7 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({
                   key={val}
                   type="button"
                   onClick={() => drawPresetText(val)}
-                  className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 font-mono text-xs font-semibold text-slate-300 hover:border-slate-700 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center min-h-[32px] rounded-lg border border-slate-800 bg-slate-900/90 px-3 py-1 font-mono text-xs font-medium text-slate-300 hover:border-cyan-500/50 hover:bg-slate-800 hover:text-white active:scale-95 transition-all cursor-pointer shadow-sm"
                 >
                   {val}
                 </button>
@@ -300,7 +315,7 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({
                   key={val}
                   type="button"
                   onClick={() => drawPresetText(val)}
-                  className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 font-mono text-xs font-semibold text-slate-300 hover:border-slate-700 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center min-h-[32px] rounded-lg border border-slate-800 bg-slate-900/90 px-3 py-1 font-mono text-xs font-medium text-slate-300 hover:border-cyan-500/50 hover:bg-slate-800 hover:text-white active:scale-95 transition-all cursor-pointer shadow-sm"
                 >
                   {val}
                 </button>
@@ -316,7 +331,7 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({
           type="button"
           onClick={initCanvas}
           disabled={!hasDrawn || isProcessing}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-700/80 bg-slate-900/80 py-3 text-xs font-semibold text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-700/80 bg-slate-900/80 py-2.5 text-xs font-semibold text-slate-300 hover:border-slate-600 hover:bg-slate-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
           <Eraser className="h-4 w-4" />
           <span>Clear</span>
@@ -326,7 +341,7 @@ export const DrawCanvas: React.FC<DrawCanvasProps> = ({
           type="button"
           onClick={handleDetectClick}
           disabled={!hasDrawn || isProcessing}
-          className="flex flex-[2] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-500/20 hover:from-cyan-400 hover:via-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-all active:scale-[0.98] cursor-pointer"
+          className="flex flex-[2] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-cyan-500/20 hover:from-cyan-400 hover:via-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-all active:scale-[0.98] cursor-pointer"
         >
           <Wand2 className="h-4 w-4" />
           <span>

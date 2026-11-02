@@ -30,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
                 Detect AI
               </span>
             </h1>
-            <p className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+            <p className="text-xs font-semibold tracking-wider text-slate-400">
               SEE · DETECT · LEARN
             </p>
           </div>
@@ -66,11 +66,11 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             />
             {modelAccuracy !== null && modelAccuracy !== undefined ? (
-              <span className="font-mono text-[11px] text-emerald-300 font-semibold hidden md:inline">
+              <span className="font-mono text-xs text-emerald-400 font-semibold hidden md:inline">
                 Model accuracy: {modelAccuracy}%
               </span>
             ) : isCached ? (
-              <span className="text-[10px] text-slate-400 hidden lg:inline">IndexedDB</span>
+              <span className="text-xs text-slate-400 hidden lg:inline">IndexedDB</span>
             ) : null}
           </button>
         </div>

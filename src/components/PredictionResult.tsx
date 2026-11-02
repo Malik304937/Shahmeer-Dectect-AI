@@ -78,7 +78,8 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
         <p className="text-xs text-slate-400 mt-1.5 max-w-xs leading-relaxed">
           Draw numbers (1–3 digits like 7, 42, 305) or letters (like A, B, ABC) to see instant AI detection.
         </p>
-        <div className="mt-5 flex items-center gap-1.5 text-[11px] text-slate-400">
+        {/* Empty state before first detection */}
+        <div className="mt-5 flex items-center gap-1.5 text-xs text-slate-400">
           <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
           <span>Column Gap Segmentation + CNN + Tesseract OCR</span>
         </div>
@@ -105,11 +106,11 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-cyan-400 flex items-center gap-1.5">
                 <Type className="h-3.5 w-3.5" />
                 <span>Detected Letters</span>
               </span>
-              <span className="text-[11px] text-slate-400">· Tesseract OCR (A-Z)</span>
+              <span className="text-xs text-slate-400">· Tesseract OCR (A-Z)</span>
             </div>
             <div className="mt-1.5 flex items-center gap-2">
               <span
@@ -139,7 +140,7 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
           <span className="font-mono text-5xl sm:text-7xl font-black tracking-widest text-white drop-shadow-[0_0_20px_rgba(34,211,238,0.5)]">
             {textToShow || '—'}
           </span>
-          <span className="text-xs text-cyan-300/80 mt-2 font-medium">
+          <span className="text-xs text-cyan-400 mt-2 font-medium">
             Alphabet Recognition (A–Z)
           </span>
         </div>
@@ -202,7 +203,7 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-slate-400">Detected Number</span>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-xs text-slate-400">
                 · {digitsList.length} {digitsList.length === 1 ? 'Digit' : 'Digits'}
               </span>
             </div>
@@ -214,7 +215,7 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
                 <span>{result.confidence}% Overall</span>
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-slate-400">
+            <p className="mt-1 text-xs text-slate-400">
               Joined from left to right via vertical gap segmentation
             </p>
           </div>
@@ -222,7 +223,7 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
 
         {/* Original Input Thumbnail */}
         <div className="flex flex-col items-end gap-1 text-right shrink-0">
-          <span className="text-[11px] font-medium text-slate-400">Input Image</span>
+          <span className="text-xs font-medium text-slate-400">Input Image</span>
           <div className="h-12 w-20 overflow-hidden rounded-lg border border-slate-700 bg-black">
             <img
               src={result.thumbnailUrl}
@@ -239,7 +240,7 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
           <span className="font-semibold text-slate-300">
             Segmented Digit Confidences ({digitsList.length}):
           </span>
-          <span className="text-[10px] text-slate-400">Click a digit to inspect softmax</span>
+          <span className="text-xs text-slate-400">Click a digit to inspect softmax</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -269,7 +270,7 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between">
                     <span className="font-mono text-2xl font-black text-white">{d.digit}</span>
-                    <span className="text-[10px] text-slate-400 font-mono">Pos #{idx + 1}</span>
+                    <span className="text-xs text-slate-400 font-mono">#{idx + 1}</span>
                   </div>
                   {/* Confidence of each digit below it */}
                   <span className="font-mono text-xs font-bold text-emerald-400 block tabular-nums">
@@ -289,7 +290,7 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
             <span className="font-semibold text-slate-300">
               Softmax Probabilities for Digit '{activeDigit.digit}' (Position #{selectedDigitIdx + 1})
             </span>
-            <span className="text-[11px] text-slate-400">Class Likelihood</span>
+            <span className="text-xs text-slate-400">Class Likelihood</span>
           </div>
 
           <div className="space-y-1.5">
@@ -304,7 +305,7 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
                 >
                   <span
                     className={`w-4 font-mono text-xs font-bold text-center ${
-                      isWinner ? 'text-cyan-300 scale-110' : 'text-slate-400'
+                      isWinner ? 'text-cyan-400 scale-110' : 'text-slate-400'
                     }`}
                   >
                     {digit}

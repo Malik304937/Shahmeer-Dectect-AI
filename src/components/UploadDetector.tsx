@@ -199,16 +199,16 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
           </button>
 
           {/* Filename Tag */}
-          <div className="absolute bottom-3 left-3 right-3 truncate rounded-lg bg-slate-950/80 px-2.5 py-1 text-[11px] font-mono text-slate-300 backdrop-blur-md border border-slate-800">
+          <div className="absolute bottom-3 left-3 right-3 truncate rounded-lg bg-slate-950/80 px-2.5 py-1 text-xs font-mono text-slate-300 backdrop-blur-md border border-slate-800">
             {imageName}
           </div>
         </div>
       )}
 
       {/* Quick Sample Presets */}
-      <div className="mt-3 flex flex-wrap items-center justify-between w-full text-xs text-slate-400">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-slate-500">Quick samples:</span>
+      <div className="mt-3 flex flex-wrap items-center gap-2 w-full text-xs text-slate-400">
+        <span className="text-xs font-medium text-slate-400">Quick samples:</span>
+        <div className="flex flex-wrap items-center gap-2">
           {targetType === 'numbers' ? (
             <>
               {(['7', '42', '305'] as const).map((s) => (
@@ -216,7 +216,7 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
                   key={s}
                   type="button"
                   onClick={() => loadSampleImage(s)}
-                  className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[11px] font-mono font-medium text-slate-300 hover:border-slate-700 hover:text-white transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center min-h-[32px] rounded-lg border border-slate-800 bg-slate-900/90 px-3 py-1 font-mono text-xs font-medium text-slate-300 hover:border-cyan-500/50 hover:bg-slate-800 hover:text-white active:scale-95 transition-all cursor-pointer shadow-sm"
                 >
                   {s}
                 </button>
@@ -229,7 +229,7 @@ export const UploadDetector: React.FC<UploadDetectorProps> = ({
                   key={s}
                   type="button"
                   onClick={() => loadSampleImage(s)}
-                  className="rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[11px] font-mono font-medium text-slate-300 hover:border-slate-700 hover:text-white transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center min-h-[32px] rounded-lg border border-slate-800 bg-slate-900/90 px-3 py-1 font-mono text-xs font-medium text-slate-300 hover:border-cyan-500/50 hover:bg-slate-800 hover:text-white active:scale-95 transition-all cursor-pointer shadow-sm"
                 >
                   {s}
                 </button>
